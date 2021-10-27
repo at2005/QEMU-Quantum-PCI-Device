@@ -295,6 +295,7 @@ static void edu_mmio_write(void *opaque, hwaddr addr, uint64_t val,
     }
 }
 
+
 static const MemoryRegionOps edu_mmio_ops = {
     .read = edu_mmio_read,
     .write = edu_mmio_write,
