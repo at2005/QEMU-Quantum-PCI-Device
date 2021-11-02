@@ -1,5 +1,5 @@
 /*
- * QEMU educational PCI device
+ * QEMU qccational PCI device
  *
  * Copyright (c) 2012-2015 Jiri Slaby
  *
@@ -33,18 +33,18 @@
 #include "qemu/module.h"
 #include "qapi/visitor.h"
 
-#define TYPE_PCI_EDU_DEVICE "edu"
-typedef struct EduState EduState;
-DECLARE_INSTANCE_CHECKER(EduState, EDU,
-                         TYPE_PCI_EDU_DEVICE)
+#define TYPE_PCI_QC_DEVICE "qc"
+typedef struct QCState QCState;
+DECLARE_INSTANCE_CHECKER(QCState, QC,
+                         TYPE_PCI_QC_DEVICE)
 
 #define FACT_IRQ        0x00000001
 #define DMA_IRQ         0x00000100
 
-#define DMA_START       0x40000
+#define DMA_START       0xFEA40000
 #define DMA_SIZE        4096
 
-struct EduState {
+struct QCState {
     PCIDevice pdev;
     MemoryRegion mmio;
 
@@ -55,17 +55,17 @@ struct EduState {
 
     uint32_t addr4;
     uint32_t fact;
-#define EDU_STATUS_COMPUTING    0x01
-#define EDU_STATUS_IRQFACT      0x80
+#define QC_STATUS_COMPUTING    0x01
+#define QC_STATUS_IRQFACT      0x80
     uint32_t status;
 
     uint32_t irq_status;
 
-#define EDU_DMA_RUN             0x1
-#define EDU_DMA_DIR(cmd)        (((cmd) & 0x2) >> 1)
-# define EDU_DMA_FROM_PCI       0
-# define EDU_DMA_TO_PCI         1
-#define EDU_DMA_IRQ             0x4
+#define QC_DMA_RUN             0x1
+#define QC_DMA_DIR(cmd)        (((cmd) & 0x2) >> 1)
+# define QC_DMA_FROM_PCI       0
+# define QC_DMA_TO_PCI         1
+#define QC_DMA_IRQ             0x4
     struct dma_state {
         dma_addr_t src;
         dma_addr_t dst;
@@ -77,38 +77,39 @@ struct EduState {
     uint64_t dma_mask;
 };
 
-static bool edu_msi_enabled(EduState *edu)
+static bool qc_msi_enabled(QCState *qc)
 {
-    return msi_enabled(&edu->pdev);
+    return msi_enabled(&qc->pdev);
 }
 
-static void edu_raise_irq(EduState *edu, uint32_t val)
+static void qc_raise_irq(QCState *qc, uint32_t val)
 {
-    edu->irq_status |= val;
-    if (edu->irq_status) {
-        if (edu_msi_enabled(edu)) {
-            msi_notify(&edu->pdev, 0);
+    qc->irq_status |= val;
+    if (qc->irq_status) {
+        if (qc_msi_enabled(qc)) {
+            msi_notify(&qc->pdev, 0);
         } else {
-            pci_set_irq(&edu->pdev, 1);
+            pci_set_irq(&qc->pdev, 1);
         }
     }
 }
 
-static void edu_lower_irq(EduState *edu, uint32_t val)
+static void qc_lower_irq(QCState *qc, uint32_t val)
 {
-    edu->irq_status &= ~val;
+    qc->irq_status &= ~val;
 
-    if (!edu->irq_status && !edu_msi_enabled(edu)) {
-        pci_set_irq(&edu->pdev, 0);
+    if (!qc->irq_status && !qc_msi_enabled(qc)) {
+        pci_set_irq(&qc->pdev, 0);
     }
 }
+
 
 static bool within(uint64_t addr, uint64_t start, uint64_t end)
 {
     return start <= addr && addr < end;
 }
 
-static void edu_check_range(uint64_t addr, uint64_t size1, uint64_t start,
+static void qc_check_range(uint64_t addr, uint64_t size1, uint64_t start,
                 uint64_t size2)
 {
     uint64_t end1 = addr + size1;
@@ -119,59 +120,65 @@ static void edu_check_range(uint64_t addr, uint64_t size1, uint64_t start,
         return;
     }
 
-    hw_error("EDU: DMA range 0x%016"PRIx64"-0x%016"PRIx64
+    hw_error("QC: DMA range 0x%016"PRIx64"-0x%016"PRIx64
              " out of bounds (0x%016"PRIx64"-0x%016"PRIx64")!",
             addr, end1 - 1, start, end2 - 1);
 }
 
-static dma_addr_t edu_clamp_addr(const EduState *edu, dma_addr_t addr)
+static dma_addr_t qc_clamp_addr(const QCState *qc, dma_addr_t addr)
 {
-    dma_addr_t res = addr & edu->dma_mask;
+    dma_addr_t res = addr & qc->dma_mask;
 
     if (addr != res) {
-        printf("EDU: clamping DMA %#.16"PRIx64" to %#.16"PRIx64"!\n", addr, res);
+        printf("QC: clamping DMA %#.16"PRIx64" to %#.16"PRIx64"!\n", addr, res);
     }
 
     return res;
 }
 
-static void edu_dma_timer(void *opaque)
+static void qc_dma_timer(void *opaque)
 {
-    EduState *edu = opaque;
+    QCState *qc = opaque;
     bool raise_irq = false;
 
-    if (!(edu->dma.cmd & EDU_DMA_RUN)) {
+    if (!(qc->dma.cmd & QC_DMA_RUN)) {
         return;
     }
 
-    if (EDU_DMA_DIR(edu->dma.cmd) == EDU_DMA_FROM_PCI) {
-        uint64_t dst = edu->dma.dst;
-        edu_check_range(dst, edu->dma.cnt, DMA_START, DMA_SIZE);
+    if (QC_DMA_DIR(qc->dma.cmd) == QC_DMA_FROM_PCI) {
+       
+	uint64_t dst = qc->dma.dst;
+	
+	qc_check_range(dst, qc->dma.cnt, DMA_START, DMA_SIZE);
         dst -= DMA_START;
-        pci_dma_read(&edu->pdev, edu_clamp_addr(edu, edu->dma.src),
-                edu->dma_buf + dst, edu->dma.cnt);
+	
+        pci_dma_read(&qc->pdev, qc_clamp_addr(qc, qc->dma.src),
+       		qc->dma_buf + dst, qc->dma.cnt);
+
     } else {
-        uint64_t src = edu->dma.src;
-        edu_check_range(src, edu->dma.cnt, DMA_START, DMA_SIZE);
+        uint64_t src = qc->dma.src;
+        qc_check_range(src, qc->dma.cnt, DMA_START, DMA_SIZE);
         src -= DMA_START;
-        pci_dma_write(&edu->pdev, edu_clamp_addr(edu, edu->dma.dst),
-                edu->dma_buf + src, edu->dma.cnt);
+        pci_dma_write(&qc->pdev, qc_clamp_addr(qc, qc->dma.dst),
+                qc->dma_buf + src, qc->dma.cnt);
     }
 
-    edu->dma.cmd &= ~EDU_DMA_RUN;
-    if (edu->dma.cmd & EDU_DMA_IRQ) {
+    qc->dma.cmd &= ~QC_DMA_RUN;
+    if (qc->dma.cmd & QC_DMA_IRQ) {
         raise_irq = true;
     }
 
     if (raise_irq) {
-        edu_raise_irq(edu, DMA_IRQ);
+        qc_raise_irq(qc, DMA_IRQ);
     }
 }
 
-static void dma_rw(EduState *edu, bool write, dma_addr_t *val, dma_addr_t *dma,
+
+
+static void dma_rw(QCState *qc, bool write, dma_addr_t *val, dma_addr_t *dma,
                 bool timer)
 {
-    if (write && (edu->dma.cmd & EDU_DMA_RUN)) {
+    if (write && (qc->dma.cmd & QC_DMA_RUN)) {
         return;
     }
 
@@ -182,13 +189,15 @@ static void dma_rw(EduState *edu, bool write, dma_addr_t *val, dma_addr_t *dma,
     }
 
     if (timer) {
-        timer_mod(&edu->dma_timer, qemu_clock_get_ms(QEMU_CLOCK_VIRTUAL) + 100);
+        timer_mod(&qc->dma_timer, qemu_clock_get_ms(QEMU_CLOCK_VIRTUAL) + 100);
     }
 }
 
-static uint64_t edu_mmio_read(void *opaque, hwaddr addr, unsigned size)
+
+
+static uint64_t qc_mmio_read(void *opaque, hwaddr addr, unsigned size)
 {
-    EduState *edu = opaque;
+    QCState *qc = opaque;
     uint64_t val = ~0ULL;
 
     if (addr < 0x80 && size != 4) {
@@ -201,43 +210,44 @@ static uint64_t edu_mmio_read(void *opaque, hwaddr addr, unsigned size)
 
     switch (addr) {
     case 0x00:
-        val = 0x010000edu;
+        val = 0x5143534D;
+	
         break;
     case 0x04:
-        val = edu->addr4;
+        val = qc->addr4;
         break;
     case 0x08:
-        qemu_mutex_lock(&edu->thr_mutex);
-        val = edu->fact;
-        qemu_mutex_unlock(&edu->thr_mutex);
+        qemu_mutex_lock(&qc->thr_mutex);
+        val = qc->fact;
+        qemu_mutex_unlock(&qc->thr_mutex);
         break;
     case 0x20:
-        val = qatomic_read(&edu->status);
+        val = qatomic_read(&qc->status);
         break;
     case 0x24:
-        val = edu->irq_status;
+        val = qc->irq_status;
         break;
     case 0x80:
-        dma_rw(edu, false, &val, &edu->dma.src, false);
+        dma_rw(qc, false, &val, &qc->dma.src, false);
         break;
     case 0x88:
-        dma_rw(edu, false, &val, &edu->dma.dst, false);
+        dma_rw(qc, false, &val, &qc->dma.dst, false);
         break;
     case 0x90:
-        dma_rw(edu, false, &val, &edu->dma.cnt, false);
+        dma_rw(qc, false, &val, &qc->dma.cnt, false);
         break;
     case 0x98:
-        dma_rw(edu, false, &val, &edu->dma.cmd, false);
+        dma_rw(qc, false, &val, &qc->dma.cmd, false);
         break;
     }
 
     return val;
 }
 
-static void edu_mmio_write(void *opaque, hwaddr addr, uint64_t val,
+static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
                 unsigned size)
 {
-    EduState *edu = opaque;
+    QCState *qc = opaque;
 
     if (addr < 0x80 && size != 4) {
         return;
@@ -249,56 +259,56 @@ static void edu_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 
     switch (addr) {
     case 0x04:
-        edu->addr4 = ~val;
+        qc->addr4 = ~val;
         break;
     case 0x08:
-        if (qatomic_read(&edu->status) & EDU_STATUS_COMPUTING) {
+        if (qatomic_read(&qc->status) & QC_STATUS_COMPUTING) {
             break;
         }
-        /* EDU_STATUS_COMPUTING cannot go 0->1 concurrently, because it is only
+        /* QC_STATUS_COMPUTING cannot go 0->1 concurrently, because it is only
          * set in this function and it is under the iothread mutex.
          */
-        qemu_mutex_lock(&edu->thr_mutex);
-        edu->fact = val;
-        qatomic_or(&edu->status, EDU_STATUS_COMPUTING);
-        qemu_cond_signal(&edu->thr_cond);
-        qemu_mutex_unlock(&edu->thr_mutex);
+        qemu_mutex_lock(&qc->thr_mutex);
+        qc->fact = val;
+        qatomic_or(&qc->status, QC_STATUS_COMPUTING);
+        qemu_cond_signal(&qc->thr_cond);
+        qemu_mutex_unlock(&qc->thr_mutex);
         break;
     case 0x20:
-        if (val & EDU_STATUS_IRQFACT) {
-            qatomic_or(&edu->status, EDU_STATUS_IRQFACT);
+        if (val & QC_STATUS_IRQFACT) {
+            qatomic_or(&qc->status, QC_STATUS_IRQFACT);
         } else {
-            qatomic_and(&edu->status, ~EDU_STATUS_IRQFACT);
+            qatomic_and(&qc->status, ~QC_STATUS_IRQFACT);
         }
         break;
     case 0x60:
-        edu_raise_irq(edu, val);
+        qc_raise_irq(qc, val);
         break;
     case 0x64:
-        edu_lower_irq(edu, val);
+        qc_lower_irq(qc, val);
         break;
     case 0x80:
-        dma_rw(edu, true, &val, &edu->dma.src, false);
+        dma_rw(qc, true, &val, &qc->dma.src, false);
         break;
     case 0x88:
-        dma_rw(edu, true, &val, &edu->dma.dst, false);
+        dma_rw(qc, true, &val, &qc->dma.dst, false);
         break;
     case 0x90:
-        dma_rw(edu, true, &val, &edu->dma.cnt, false);
+        dma_rw(qc, true, &val, &qc->dma.cnt, false);
         break;
     case 0x98:
-        if (!(val & EDU_DMA_RUN)) {
+        if (!(val & QC_DMA_RUN)) {
             break;
         }
-        dma_rw(edu, true, &val, &edu->dma.cmd, true);
+        dma_rw(qc, true, &val, &qc->dma.cmd, true);
         break;
     }
 }
 
 
-static const MemoryRegionOps edu_mmio_ops = {
-    .read = edu_mmio_read,
-    .write = edu_mmio_write,
+static const MemoryRegionOps qc_mmio_ops = {
+    .read = qc_mmio_read,
+    .write = qc_mmio_write,
     .endianness = DEVICE_NATIVE_ENDIAN,
     .valid = {
         .min_access_size = 4,
@@ -315,26 +325,26 @@ static const MemoryRegionOps edu_mmio_ops = {
  * We purposely use a thread, so that users are forced to wait for the status
  * register.
  */
-static void *edu_fact_thread(void *opaque)
+static void *qc_fact_thread(void *opaque)
 {
-    EduState *edu = opaque;
+    QCState *qc = opaque;
 
     while (1) {
         uint32_t val, ret = 1;
 
-        qemu_mutex_lock(&edu->thr_mutex);
-        while ((qatomic_read(&edu->status) & EDU_STATUS_COMPUTING) == 0 &&
-                        !edu->stopping) {
-            qemu_cond_wait(&edu->thr_cond, &edu->thr_mutex);
+        qemu_mutex_lock(&qc->thr_mutex);
+        while ((qatomic_read(&qc->status) & QC_STATUS_COMPUTING) == 0 &&
+                        !qc->stopping) {
+            qemu_cond_wait(&qc->thr_cond, &qc->thr_mutex);
         }
 
-        if (edu->stopping) {
-            qemu_mutex_unlock(&edu->thr_mutex);
+        if (qc->stopping) {
+            qemu_mutex_unlock(&qc->thr_mutex);
             break;
         }
 
-        val = edu->fact;
-        qemu_mutex_unlock(&edu->thr_mutex);
+        val = qc->fact;
+        qemu_mutex_unlock(&qc->thr_mutex);
 
         while (val > 0) {
             ret *= val--;
@@ -345,14 +355,14 @@ static void *edu_fact_thread(void *opaque)
          * forced to check the status properly.
          */
 
-        qemu_mutex_lock(&edu->thr_mutex);
-        edu->fact = ret;
-        qemu_mutex_unlock(&edu->thr_mutex);
-        qatomic_and(&edu->status, ~EDU_STATUS_COMPUTING);
+        qemu_mutex_lock(&qc->thr_mutex);
+        qc->fact = ret;
+        qemu_mutex_unlock(&qc->thr_mutex);
+        qatomic_and(&qc->status, ~QC_STATUS_COMPUTING);
 
-        if (qatomic_read(&edu->status) & EDU_STATUS_IRQFACT) {
+        if (qatomic_read(&qc->status) & QC_STATUS_IRQFACT) {
             qemu_mutex_lock_iothread();
-            edu_raise_irq(edu, FACT_IRQ);
+            qc_raise_irq(qc, FACT_IRQ);
             qemu_mutex_unlock_iothread();
         }
     }
@@ -360,9 +370,10 @@ static void *edu_fact_thread(void *opaque)
     return NULL;
 }
 
-static void pci_edu_realize(PCIDevice *pdev, Error **errp)
+static void pci_qc_realize(PCIDevice *pdev, Error **errp)
 {
-    EduState *edu = EDU(pdev);
+    QCState *qc = QC(pdev);
+
     uint8_t *pci_conf = pdev->config;
 
     pci_config_set_interrupt_pin(pci_conf, 1);
@@ -371,51 +382,51 @@ static void pci_edu_realize(PCIDevice *pdev, Error **errp)
         return;
     }
 
-    timer_init_ms(&edu->dma_timer, QEMU_CLOCK_VIRTUAL, edu_dma_timer, edu);
+    timer_init_ms(&qc->dma_timer, QEMU_CLOCK_VIRTUAL, qc_dma_timer, qc);
 
-    qemu_mutex_init(&edu->thr_mutex);
-    qemu_cond_init(&edu->thr_cond);
-    qemu_thread_create(&edu->thread, "edu", edu_fact_thread,
-                       edu, QEMU_THREAD_JOINABLE);
+    qemu_mutex_init(&qc->thr_mutex);
+    qemu_cond_init(&qc->thr_cond);
+    qemu_thread_create(&qc->thread, "qc", qc_fact_thread,
+                       qc, QEMU_THREAD_JOINABLE);
 
-    memory_region_init_io(&edu->mmio, OBJECT(edu), &edu_mmio_ops, edu,
-                    "edu-mmio", 1 * MiB);
-    pci_register_bar(pdev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &edu->mmio);
+    memory_region_init_io(&qc->mmio, OBJECT(qc), &qc_mmio_ops, qc,
+                    "qc-mmio", 1 * MiB);
+    pci_register_bar(pdev, 0, PCI_BASE_ADDRESS_SPACE_MEMORY, &qc->mmio);
 }
 
-static void pci_edu_uninit(PCIDevice *pdev)
+static void pci_qc_uninit(PCIDevice *pdev)
 {
-    EduState *edu = EDU(pdev);
+    QCState *qc = QC(pdev);
 
-    qemu_mutex_lock(&edu->thr_mutex);
-    edu->stopping = true;
-    qemu_mutex_unlock(&edu->thr_mutex);
-    qemu_cond_signal(&edu->thr_cond);
-    qemu_thread_join(&edu->thread);
+    qemu_mutex_lock(&qc->thr_mutex);
+    qc->stopping = true;
+    qemu_mutex_unlock(&qc->thr_mutex);
+    qemu_cond_signal(&qc->thr_cond);
+    qemu_thread_join(&qc->thread);
 
-    qemu_cond_destroy(&edu->thr_cond);
-    qemu_mutex_destroy(&edu->thr_mutex);
+    qemu_cond_destroy(&qc->thr_cond);
+    qemu_mutex_destroy(&qc->thr_mutex);
 
-    timer_del(&edu->dma_timer);
+    timer_del(&qc->dma_timer);
     msi_uninit(pdev);
 }
 
-static void edu_instance_init(Object *obj)
+static void qc_instance_init(Object *obj)
 {
-    EduState *edu = EDU(obj);
+    QCState *qc = QC(obj);
 
-    edu->dma_mask = (1UL << 28) - 1;
+    qc->dma_mask = (1UL << 28) - 1;
     object_property_add_uint64_ptr(obj, "dma_mask",
-                                   &edu->dma_mask, OBJ_PROP_FLAG_READWRITE);
+                                   &qc->dma_mask, OBJ_PROP_FLAG_READWRITE);
 }
 
-static void edu_class_init(ObjectClass *class, void *data)
+static void qc_class_init(ObjectClass *class, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(class);
     PCIDeviceClass *k = PCI_DEVICE_CLASS(class);
 
-    k->realize = pci_edu_realize;
-    k->exit = pci_edu_uninit;
+    k->realize = pci_qc_realize;
+    k->exit = pci_qc_uninit;
     k->vendor_id = 0xC0DE/*PCI_VENDOR_ID_QEMU*/;
     k->device_id = 0xDEAD/*0x11e8*/; 
     k->revision = 0x10;
@@ -424,22 +435,22 @@ static void edu_class_init(ObjectClass *class, void *data)
 
 }
 
-static void pci_edu_register_types(void)
+static void pci_qc_register_types(void)
 {
     static InterfaceInfo interfaces[] = {
         { INTERFACE_CONVENTIONAL_PCI_DEVICE },
         { },
     };
-    static const TypeInfo edu_info = {
-        .name          = TYPE_PCI_EDU_DEVICE,
+    static const TypeInfo qc_info = {
+        .name          = TYPE_PCI_QC_DEVICE,
         .parent        = TYPE_PCI_DEVICE,
-        .instance_size = sizeof(EduState),
-        .instance_init = edu_instance_init,
-        .class_init    = edu_class_init,
+        .instance_size = sizeof(QCState),
+        .instance_init = qc_instance_init,
+        .class_init    = qc_class_init,
         .interfaces = interfaces,
     };
 
-    type_register_static(&edu_info);
+    type_register_static(&qc_info);
 }
 
-type_init(pci_edu_register_types)
+type_init(pci_qc_register_types)
