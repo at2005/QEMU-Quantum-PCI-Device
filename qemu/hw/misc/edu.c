@@ -32,6 +32,42 @@
 #include "qemu/main-loop.h" /* iothread mutex */
 #include "qemu/module.h"
 #include "qapi/visitor.h"
+#include "qc.h"
+
+// complex number operations
+Complex conjugate(Complex a) {
+	Complex b = {a.real, -1*a.imag};
+	return b;
+} 
+
+Complex cadd(Complex a, Complex b) {
+	Complex sum = {a.real + b.real, a.imag + b.imag};
+	return sum;
+}
+
+Complex csub(Complex a, Complex b) {
+	Complex diff = {a.real - b.real, a.imag - b.imag};
+	return diff;
+}
+
+Complex cmul(Complex a, Complex b) {
+	Complex prod = {a.real * b.real - (a.imag * b.image), a.real * b.imag + (a.imag * b.real)};
+	return prod;
+}
+
+
+Complex cdiv(Complex a, Complex b) {
+	
+
+}
+
+
+void vec_push(CVec* vector, Complex el) {
+	Item* new_item = (Item*)malloc(sizeof(Item));
+//	item->ptr = 
+
+}
+
 
 #define TYPE_PCI_QC_DEVICE "qc"
 typedef struct QCState QCState;
