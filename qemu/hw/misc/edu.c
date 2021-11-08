@@ -51,22 +51,33 @@ Complex csub(Complex a, Complex b) {
 }
 
 Complex cmul(Complex a, Complex b) {
-	Complex prod = {a.real * b.real - (a.imag * b.image), a.real * b.imag + (a.imag * b.real)};
+	Complex prod = {a.real * b.real - (a.imag * b.imag), a.real * b.imag + (a.imag * b.real)};
 	return prod;
 }
 
 
 Complex cdiv(Complex a, Complex b) {
-	
-
+	Complex ratio;
+	ratio.real = a.real * b.real + b.imag * a.imag;
+	ratio.real /= b.real * b.real + b.imag * b.imag;
+	ratio.imag = (b.real * a.imag) - a.real * b.imag;
+	ratio.imag /= b.real * b.real + b.imag * b.imag;
+	return ratio;
 }
 
 
 void vec_push(CVec* vector, Complex el) {
 	Item* new_item = (Item*)malloc(sizeof(Item));
-//	item->ptr = 
+	new_item->val = el;
+	vector->tail->next = new_item;
+	new_item->prev = vector->tail;
+	vector->tail = new_item;
+	new_item->next = vector->head;
+	vec->head->prev = new_item;
 
 }
+
+
 
 
 #define TYPE_PCI_QC_DEVICE "qc"
@@ -460,7 +471,6 @@ static void qc_class_init(ObjectClass *class, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(class);
     PCIDeviceClass *k = PCI_DEVICE_CLASS(class);
-
     k->realize = pci_qc_realize;
     k->exit = pci_qc_uninit;
     k->vendor_id = 0xC0DE/*PCI_VENDOR_ID_QEMU*/;

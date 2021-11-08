@@ -24,7 +24,7 @@ typedef struct Item {
 
 
 typedef struct CVec {
-	unsigned int dimension;
+	unsigned int size;
 	Item* head;
 	Item* tail;
 		
