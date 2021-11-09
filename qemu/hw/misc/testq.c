@@ -135,21 +135,44 @@ CVec vindex(CVec* m, unsigned int index) {
 
 
 
-void linop(CVec* op, CVec* state) {
-	
+CVec* linop(CVec* op, CVec* state) {
+	CVec* res = create_vec();
 	for(int i = 0; i < op->size; i++) {
 		CVec vec = vindex(op,i);
-		printc(dot(&vec, state));
+		Complex* mul_res = (Complex*)malloc(sizeof(Complex));
+		*mul_res = dot(&vec, state);
+		vec_push(res, mul_res);
+	
+	}
+	
+	return res;
+
+
+}
+
+
+// absolute square
+Complex absq(Complex a) {
+	Complex b = a;
+	b.imag *= -1;
+	return cmul(a,b);
+
+
+}
+
+
+void print_prob(CVec* v) {
+	for(int i = 0; i < v->size; i++) {
+		printf("P(%d) is %f% \n", i, absq(CVAL(subscript(v,i)->val)).real * 100);
 	
 	}
 
 
 }
 
-
 int main() {
-	Complex test1 = {1/sqrt(2),0};
-	Complex test2 = {1/sqrt(2),0};
+	Complex test1 = {sin(2),0};
+	Complex test2 = {cos(2),0};
 	//Complex test6 = {12,0};
 	
 	CVec* v = create_vec();
@@ -157,7 +180,6 @@ int main() {
 	vec_push(v,&test2);
 
 	
-
 	Complex m1 = {1/sqrt(2),0};
 	Complex m2 = {1/sqrt(2),0};
 	Complex m3 = {1/sqrt(2),0};
@@ -177,26 +199,13 @@ int main() {
 	vec_push(m, c1);
 	vec_push(m, c2);
 	
-	linop(m, v);
-		
+	v = linop(m,v);
+	print_prob(v);
 
-	/*vec_push(v, &test1);
-	vec_push(v, &test2);
-	vec_push(v, &test6);
-		
-	Complex test3 = {1,0};	
-	Complex test4 = {4,0};	
-	//Complex test5 = {7,0};	
-
-	CVec* v2 = create_vec();	
-	vec_push(v2, &test3);	
-	vec_push(v2, &test4);	
-	vec_push(v2, &test5);
+	v = linop(m,v);
+	print_prob(v);
 	
-	printc(dot(v,v2));	
 
-	//printc(CVAL(subscript(v,0)->val));
-	*/
 	return 0;
 
 
