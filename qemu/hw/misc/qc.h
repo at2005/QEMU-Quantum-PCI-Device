@@ -16,7 +16,7 @@ Complex cdiv(Complex a, Complex b);
 
 
 typedef struct Item {
-	Complex val;
+	void* val;
 	struct Item* prev;
 	struct Item* next;
 
@@ -30,3 +30,12 @@ typedef struct CVec {
 		
 
 } CVec;
+
+
+typedef struct Matrix {
+	unsigned int m;
+	unsigned int n;
+	Item* head;
+	Item* tail;
+
+} Matrix;
