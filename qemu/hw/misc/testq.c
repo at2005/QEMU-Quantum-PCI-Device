@@ -194,12 +194,12 @@ void print_prob(CVec* v) {
 void print_vector(CVec* v) {
 	for(int i = 0; i < v->size; i++) {
 		Complex num = CVAL(subscript(v,i)->val);
-		printf("(%f+%fi)|%d> ",num.real, num.imag,i);
-		if(i+1 < v->size) printf("+ ");
+		printf("%f+%fi|%d>\n",num.real, num.imag,i);
+	//	if(i+1 < v->size) printf("+ ");
 	
 	}
 
-	printf("\n");
+//	printf("\n");
 
 
 
@@ -295,62 +295,71 @@ void print_matrix(CVec* m) {
 
 }
 
+Complex* create_complex(double real, double imag) {
+	Complex* a = (Complex*)malloc(sizeof(Complex));
+	a->real = real;
+	a->imag = imag;
+	return a;
+
+}
+
+CVec* create_matrix(Complex* a, Complex* b, Complex* c, Complex* d) {
+	CVec* matrix = create_vec();	
+	CVec* row1 = create_vec();
+	CVec* row2 = create_vec();
+
+	vec_push(row1, a);
+	vec_push(row1, b);
+	vec_push(row2, c);
+	vec_push(row2, d);
+
+	vec_push(matrix, row1);
+	vec_push(matrix, row2);
+	
+	return matrix;
+
+}
+
+
+CVec* h_matrix() {
+
+	Complex* m1 = create_complex(1/sqrt(2), 0);
+	Complex* m2 = create_complex(1/sqrt(2), 0);
+	Complex* m3 = create_complex(1/sqrt(2), 0);
+	Complex* m4 = create_complex(-1/sqrt(2), 0);
+
+
+	CVec* hadamard_2d = create_matrix(m1,m2,m3,m4);
+
+	return hadamard_2d;
+	
+
+}
+
 
 int main() {
-	Complex test1 = {1/sqrt(2),0};
-	Complex test2 = {1/sqrt(2),0};
+	Complex test1 = {0,0};
+	Complex test2 = {1,0};
 	//Complex test6 = {12,0};
-	
 	CVec* v = create_vec();
 	vec_push(v,&test1);
 	vec_push(v,&test2);
 
-	
-	Complex m1 = {1,0};
-	Complex m2 = {0,0};
-	Complex m3 = {0,0};
-	Complex m4 = {-1,0};
-	
-	CVec* c1 = create_vec();
-	
-	vec_push(c1, &m1);
-	vec_push(c1, &m2);
-	
-	CVec* c2 = create_vec();
+	Complex test3 = {1,0};
+	Complex test4 = {0,0};
+	CVec* v2 = create_vec();
+	vec_push(v2, &test3);
+	vec_push(v2, &test4);
 
-	vec_push(c2, &m3);
-	vec_push(c2, &m4);
-	
-	CVec* m = create_vec();
-	vec_push(m, c1);
-	vec_push(m, c2);
-	
-	CVec* matrix2 = create_vec();
-	vec_push(matrix2, c1);
-	vec_push(matrix2, c2);
+	CVec* d4 = tensor_vec(v,v2);
 
-	//CVec* tmat = transpose(m);
-	//print_matrix(tensor(m, matrix2));
-	
-	CVec* tmat = tensor(m,matrix2);
-	
-	CVec* vec4 = create_vec();
-	vec_push(vec4, &m2);
-	vec_push(vec4, &m2);
-	vec_push(vec4, &m1);
-	vec_push(vec4, &m2);
-	
-	vec4 = linop(tmat,vec4);
+
+	CVec* h = h_matrix();
+	CVec* h4 = tensor(h,h);
+
+	d4 = linop(h4, d4);
+	print_vector(d4);
 		
-	print_vector(linop(tmat, vec4));
-
-//	v = linop(m,v);
-//	print_vector(v);
-	v = linop(m,v);
-	v = linop(m,v);
-
-	//	print_vector(v);
-	
 
 	return 0;
 
