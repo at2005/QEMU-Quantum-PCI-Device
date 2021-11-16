@@ -321,7 +321,63 @@ CVec* create_matrix(Complex* a, Complex* b, Complex* c, Complex* d) {
 }
 
 
-CVec* h_matrix() {
+CVec* cnot_gate() {
+	CVec* matrix = create_vec();
+	CVec* row1 = create_vec();
+	CVec* row2 = create_vec();
+	CVec* row3 = create_vec();
+	CVec* row4 = create_vec();
+	
+	Complex* m1 = create_complex(1,0);
+	Complex* m2 = create_complex(0,0);
+	Complex* m3 = create_complex(0,0);
+	Complex* m4 = create_complex(0,0);
+	
+	vec_push(row1, m1);
+	vec_push(row1, m2);
+	vec_push(row1, m3);
+	vec_push(row1, m4);
+
+	Complex* m5 = create_complex(0,0);
+	Complex* m6 = create_complex(1,0);
+	Complex* m7 = create_complex(0,0);
+	Complex* m8 = create_complex(0,0);
+
+	vec_push(row2, m5);
+	vec_push(row2, m6);
+	vec_push(row2, m7);
+	vec_push(row2, m8);
+
+	Complex* m9 = create_complex(0,0);
+	Complex* m10 = create_complex(0,0);
+	Complex* m11 = create_complex(0,0);
+	Complex* m12 = create_complex(1,0);
+	
+	vec_push(row3, m9);
+	vec_push(row3, m10);
+	vec_push(row3, m11);
+	vec_push(row3, m12);
+
+	Complex* m13 = create_complex(0,0);
+	Complex* m14 = create_complex(0,0);
+	Complex* m15 = create_complex(1,0);
+	Complex* m16 = create_complex(0,0);
+
+	vec_push(row4, m13);
+	vec_push(row4, m14);
+	vec_push(row4, m15);
+	vec_push(row4, m16);
+
+	vec_push(matrix, row1);
+	vec_push(matrix, row2);
+	vec_push(matrix, row3);
+	vec_push(matrix, row4);
+	
+	return matrix;
+}
+
+
+CVec* h_gate() {
 
 	Complex* m1 = create_complex(1/sqrt(2), 0);
 	Complex* m2 = create_complex(1/sqrt(2), 0);
@@ -337,9 +393,61 @@ CVec* h_matrix() {
 }
 
 
+CVec* id_gate() {
+	Complex* m1 = create_complex(1,0);
+	Complex* m2 = create_complex(0,0);
+	Complex* m3 = create_complex(0,0);
+	Complex* m4 = create_complex(1,0);
+
+	CVec* id_2d = create_matrix(m1, m2, m3, m4);
+	return id_2d;
+
+}
+
+
+CVec* x_gate() {
+	Complex* m1 = create_complex(0,0);
+	Complex* m2 = create_complex(1,0);
+	Complex* m3 = create_complex(1,0);
+	Complex* m4 = create_complex(0,0);
+
+	CVec* x_2d = create_matrix(m1, m2, m3, m4);
+	return x_2d;
+
+}
+
+
+CVec* z_gate() {
+	Complex* m1 = create_complex(1,0);
+	Complex* m2 = create_complex(0,0);
+	Complex* m3 = create_complex(0,0);
+	Complex* m4 = create_complex(-1,0);
+
+	CVec* z_2d = create_matrix(m1, m2, m3, m4);
+	return z_2d;
+
+
+}
+
+
+CVec* y_gate() {
+
+	Complex* m1 = create_complex(0,0);
+	Complex* m2 = create_complex(0,-1);
+	Complex* m3 = create_complex(0,1);
+	Complex* m4 = create_complex(0,0);
+
+	CVec* y_2d = create_matrix(m1, m2, m3, m4);
+	return y_2d;
+
+
+}
+
+
+
 int main() {
-	Complex test1 = {0,0};
-	Complex test2 = {1,0};
+	Complex test1 = {1/sqrt(2),0};
+	Complex test2 = {1/sqrt(2),0};
 	//Complex test6 = {12,0};
 	CVec* v = create_vec();
 	vec_push(v,&test1);
@@ -351,14 +459,17 @@ int main() {
 	vec_push(v2, &test3);
 	vec_push(v2, &test4);
 
+
 	CVec* d4 = tensor_vec(v,v2);
+	
 
+	//CVec* h = h_gate();
+	//CVec* h4 = tensor(h,h);
+	
+	CVec* cnot = cnot_gate();
 
-	CVec* h = h_matrix();
-	CVec* h4 = tensor(h,h);
-
-	d4 = linop(h4, d4);
-	print_vector(d4);
+	d4 = linop(cnot, d4);
+	print_prob(d4);
 		
 
 	return 0;

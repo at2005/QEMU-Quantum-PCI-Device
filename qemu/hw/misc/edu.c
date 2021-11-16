@@ -45,6 +45,7 @@ Complex cadd(Complex a, Complex b) {
 	return sum;
 }
 
+
 Complex csub(Complex a, Complex b) {
 	Complex diff = {a.real - b.real, a.imag - b.imag};
 	return diff;
