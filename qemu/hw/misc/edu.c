@@ -191,6 +191,19 @@ CVec* linop(CVec* op, CVec* state) {
 }
 
 
+// multiply two matrices together
+CVec* matrix_mult(CVec* m1, CVec* m2) {
+	// iterate over every row vector
+	// transpose second matrix and iterate over each column vector
+	// inner product -> column vector * row vector
+	// append to row vector
+	CVec* res = create_vec();
+	
+
+}
+
+
+
 // absolute square
 Complex absq(Complex a) {
 	Complex b = a;
@@ -308,7 +321,8 @@ void print_matrix(CVec* m) {
 		CVec* v = VPTR(subscript(m,i)->val);
 		for(int j = 0; j < v->size; j++) {
 			Complex c = CVAL(subscript(v,j)->val);
-			printf("%f + %fi  ", c.real, c.imag);
+			if( m->size < 3) printf("%f + %fi  ", c.real, c.imag);
+			else printf("%f ", c.real);
 			
 		}
 
@@ -466,6 +480,66 @@ CVec* y_gate() {
 }
 
 
+#define NUM_QFUNC 6
+// actual qc device
+static struct {
+	CVec* statevec;
+       	unsigned int num_qubits;	
+	CVec* (*func_arr[NUM_QFUNC])();
+
+} QSim;
+
+
+void init_qc(unsigned int num_qubits) {
+	QSim.num_qubits = num_qubits;
+	QSim.statevec = create_vec();
+	
+	for(int i = 0; i < pow(2,num_qubits); i++) {
+		Complex* c = create_complex(0,0);
+		if(i == 0) c->real = 1;
+		vec_push(QSim.statevec, c);
+
+	}
+
+/*	QSim.func_arr[0] = h_gate;
+	QSim.func_arr[1] = x_gate;
+	QSim.func_arr[2] = y_gate;
+	QSim.func_arr[3] = z_gate;
+	QSim.func_arr[4] = id_gate;
+	QSim.func_arr[5] = cnot_gate;
+	
+*/
+}
+
+
+
+/*void apply_op(unsigned int opcode, unsigned int q1, unsigned int q2, unsigned int metadata) {
+	CVec* (*gate)() = QSim.func_arr[opcode];
+	
+
+}*/
+
+
+CVec* apply_h(unsigned int qubit) {
+	CVec* mat;
+	for(int i = 0; i < 4; i++) {
+		if(i == qubit) {
+			if(i == 0) mat = h_gate();
+			else mat = tensor(mat, h_gate);
+			continue;
+		}
+
+		if(i == 0) mat = id_gate();
+		else mat = tensor(mat,id_gate());
+		
+		
+	
+	}
+
+	return mat;
+
+}
+
 
 #define TYPE_PCI_QC_DEVICE "qc"
 typedef struct QCState QCState;
@@ -612,6 +686,8 @@ static void qc_dma_timer(void *opaque)
 static void dma_rw(QCState *qc, bool write, dma_addr_t *val, dma_addr_t *dma,
                 bool timer)
 {
+
+
     if (write && (qc->dma.cmd & QC_DMA_RUN)) {
         return;
     }
@@ -651,10 +727,13 @@ static uint64_t qc_mmio_read(void *opaque, hwaddr addr, unsigned size)
         val = qc->addr4;
         break;
     case 0x08:
-        qemu_mutex_lock(&qc->thr_mutex);
+        /*qemu_mutex_lock(&qc->thr_mutex);
         val = qc->fact;
         qemu_mutex_unlock(&qc->thr_mutex);
-        break;
+        break;*/
+		
+
+	break;
     case 0x20:
         val = qatomic_read(&qc->status);
         break;
@@ -696,14 +775,35 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
         qc->addr4 = ~val;
         break;
     case 0x08:
+
         if (qatomic_read(&qc->status) & QC_STATUS_COMPUTING) {
             break;
         }
-        /* QC_STATUS_COMPUTING cannot go 0->1 concurrently, because it is only
+        /**  QC_STATUS_COMPUTING cannot go 0->1 concurrently, because it is only
          * set in this function and it is under the iothread mutex.
          */
+	
         qemu_mutex_lock(&qc->thr_mutex);
-        qc->fact = val;
+        //qc->fact = val;
+
+		
+		
+	if(val == 0x1) {
+		init_qc(4);
+		for(int i = 0; i < 10; i++) {
+			if(qc->dma_buf[i] == 0xA) {
+				QSim.statevec = linop(apply_h(qc->dma_buf[i+1]),QSim.statevec);
+				i++;
+			
+			}
+		
+		}
+
+		print_vector(QSim.statevec);
+
+
+	}
+
         qatomic_or(&qc->status, QC_STATUS_COMPUTING);
         qemu_cond_signal(&qc->thr_cond);
         qemu_mutex_unlock(&qc->thr_mutex);
@@ -738,6 +838,7 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
         break;
     }
 }
+
 
 
 static const MemoryRegionOps qc_mmio_ops = {
