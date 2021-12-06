@@ -524,8 +524,9 @@ CVec* apply_h(unsigned int qubit) {
 	CVec* mat;
 	for(int i = 0; i < 4; i++) {
 		if(i == qubit) {
+			printf("hello\n\n");
 			if(i == 0) mat = h_gate();
-			else mat = tensor(mat, h_gate);
+			else mat = tensor(mat, h_gate());
 			continue;
 		}
 
@@ -539,6 +540,7 @@ CVec* apply_h(unsigned int qubit) {
 	return mat;
 
 }
+
 
 
 #define TYPE_PCI_QC_DEVICE "qc"
@@ -793,6 +795,7 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 		for(int i = 0; i < 10; i++) {
 			if(qc->dma_buf[i] == 0xA) {
 				QSim.statevec = linop(apply_h(qc->dma_buf[i+1]),QSim.statevec);
+				//(apply_h(qc->dma_buf[i+1]));
 				i++;
 			
 			}
