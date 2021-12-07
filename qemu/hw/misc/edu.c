@@ -501,32 +501,32 @@ void init_qc(unsigned int num_qubits) {
 
 	}
 
-/*	QSim.func_arr[0] = h_gate;
-	QSim.func_arr[1] = x_gate;
-	QSim.func_arr[2] = y_gate;
-	QSim.func_arr[3] = z_gate;
-	QSim.func_arr[4] = id_gate;
-	QSim.func_arr[5] = cnot_gate;
+	QSim.func_arr[0] = &h_gate;
+	QSim.func_arr[1] = &x_gate;
+	QSim.func_arr[2] = &y_gate;
+	QSim.func_arr[3] = &z_gate;
+	QSim.func_arr[4] = &id_gate;
+	QSim.func_arr[5] = &cnot_gate;
 	
-*/
+
 }
 
 
 
-/*void apply_op(unsigned int opcode, unsigned int q1, unsigned int q2, unsigned int metadata) {
-	CVec* (*gate)() = QSim.func_arr[opcode];
+
+
+CVec* apply_gate(uint8_t index, uint8_t qubit) {
 	
 
-}*/
 
+	CVec* (*gate)() = QSim.func_arr[index];
+	
 
-CVec* apply_h(unsigned int qubit) {
 	CVec* mat;
 	for(int i = 0; i < 4; i++) {
 		if(i == qubit) {
-			printf("hello\n\n");
-			if(i == 0) mat = h_gate();
-			else mat = tensor(mat, h_gate());
+			if(i == 0) mat = gate();
+			else mat = tensor(mat, gate());
 			continue;
 		}
 
@@ -557,6 +557,7 @@ DECLARE_INSTANCE_CHECKER(QCState, QC,
 struct QCState {
     PCIDevice pdev;
     MemoryRegion mmio;
+
 
     QemuThread thread;
     QemuMutex thr_mutex;
@@ -791,15 +792,12 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 		
 		
 	if(val == 0x1) {
-		init_qc(4);
-		for(int i = 0; i < 10; i++) {
-			if(qc->dma_buf[i] == 0xA) {
-				QSim.statevec = linop(apply_h(qc->dma_buf[i+1]),QSim.statevec);
-				//(apply_h(qc->dma_buf[i+1]));
-				i++;
+		int i = 0;
+		while(1) {
+			if(qc->dma_buf[i] == 0xD) break;
+			QSim.statevec = linop(apply_gate(qc->dma_buf[i], qc->dma_buf[i+1]),QSim.statevec);
+			i+=2;
 			
-			}
-		
 		}
 
 		print_vector(QSim.statevec);
@@ -969,6 +967,7 @@ static void qc_class_init(ObjectClass *class, void *data)
     k->revision = 0x10;
     k->class_id = PCI_CLASS_OTHERS;
     set_bit(DEVICE_CATEGORY_MISC, dc->categories);
+    init_qc(4);
 
 }
 
