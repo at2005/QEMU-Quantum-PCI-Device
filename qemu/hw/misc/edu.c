@@ -513,7 +513,7 @@ void init_qc(unsigned int num_qubits) {
 
 
 
-
+#define NUM_QUBITS 4
 
 CVec* apply_gate(uint8_t index, uint8_t qubit) {
 	
@@ -523,7 +523,7 @@ CVec* apply_gate(uint8_t index, uint8_t qubit) {
 	
 
 	CVec* mat;
-	for(int i = 0; i < 4; i++) {
+	for(int i = 0; i < NUM_QUBITS; i++) {
 		if(i == qubit) {
 			if(i == 0) mat = gate();
 			else mat = tensor(mat, gate());
@@ -792,7 +792,7 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 		
 		
 	if(val == 0x1) {
-		int i = 0;
+		int i = 1024;
 		while(1) {
 			if(qc->dma_buf[i] == 0xD) break;
 			QSim.statevec = linop(apply_gate(qc->dma_buf[i], qc->dma_buf[i+1]),QSim.statevec);
@@ -967,7 +967,7 @@ static void qc_class_init(ObjectClass *class, void *data)
     k->revision = 0x10;
     k->class_id = PCI_CLASS_OTHERS;
     set_bit(DEVICE_CATEGORY_MISC, dc->categories);
-    init_qc(4);
+    init_qc(NUM_QUBITS);
 
 }
 
