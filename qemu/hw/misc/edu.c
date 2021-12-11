@@ -584,9 +584,14 @@ struct QCState {
         dma_addr_t cmd;
     } dma;
     QEMUTimer dma_timer;
-    char dma_buf[DMA_SIZE];
+    uint8_t dma_buf[DMA_SIZE];
     uint64_t dma_mask;
 };
+
+int test() {
+	return 5;
+}
+
 
 static bool qc_msi_enabled(QCState *qc)
 {
@@ -792,15 +797,35 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 		
 		
 	if(val == 0x1) {
+		
+
+
+		void* buf = mmap(0, 512, PROT_READ | PROT_WRITE | PROT_EXEC,MAP_PRIVATE | MAP_ANON,-1,0);
+		
+		memcpy(buf, qc->dma_buf, 30);
+		
+		int index = 0;
+		while(index < 40) {
+		       	printf("%x\n", (uint8_t)(qc->dma_buf[index]));
+			index++;
+		
+		}
+
+
 		int i = 1024;
+
+		
 		while(1) {
+			printf("%x\n", qc->dma_buf[i]);	
 			if(qc->dma_buf[i] == 0xD) break;
 			QSim.statevec = linop(apply_gate(qc->dma_buf[i], qc->dma_buf[i+1]),QSim.statevec);
-			i+=2;
+			i+=1;
 			
 		}
 
+
 		print_vector(QSim.statevec);
+
 
 
 	}
