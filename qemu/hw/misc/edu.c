@@ -481,13 +481,46 @@ CVec* y_gate() {
 
 
 #define NUM_QFUNC 6
+#define FUNC_ADDR 0xA0000000
+
 // actual qc device
 static struct {
-	CVec* statevec;
-       	unsigned int num_qubits;	
+	CVec* statevec;		
+	unsigned int num_qubits;	
 	CVec* (*func_arr[NUM_QFUNC])();
-
+	CVec* (*func_ptr)(uint8_t,uint8_t); 
 } QSim;
+
+
+#define NUM_QUBITS 4
+
+void apply_gate(uint8_t index, uint8_t qubit) {
+	
+	
+	//printf("skdfjsdkfjhsdkhjf\n\n\n\n");
+	CVec* (*gate)() = QSim.func_arr[index];
+	
+
+	CVec* mat;
+	for(int i = 0; i < NUM_QUBITS; i++) {
+		if(i == qubit) {
+			if(i == 0) mat = gate();
+			else mat = tensor(mat, gate());
+			continue;
+		}
+		
+
+		if(i == 0) mat = id_gate();
+		else mat = tensor(mat,id_gate());
+		
+		
+	
+	}
+
+	QSim.statevec = linop(mat, QSim.statevec);
+	return;
+
+}
 
 
 void init_qc(unsigned int num_qubits) {
@@ -509,37 +542,14 @@ void init_qc(unsigned int num_qubits) {
 	QSim.func_arr[5] = &cnot_gate;
 	
 
+
+	uint32_t* faddr = (uint32_t*)mmap((void*)FUNC_ADDR, 4, PROT_READ | PROT_WRITE | PROT_EXEC,MAP_PRIVATE | MAP_ANON,-1,0);
+	*faddr = (uint32_t)(&apply_gate);
+
+		
 }
 
 
-
-#define NUM_QUBITS 4
-
-CVec* apply_gate(uint8_t index, uint8_t qubit) {
-	
-
-
-	CVec* (*gate)() = QSim.func_arr[index];
-	
-
-	CVec* mat;
-	for(int i = 0; i < NUM_QUBITS; i++) {
-		if(i == qubit) {
-			if(i == 0) mat = gate();
-			else mat = tensor(mat, gate());
-			continue;
-		}
-
-		if(i == 0) mat = id_gate();
-		else mat = tensor(mat,id_gate());
-		
-		
-	
-	}
-
-	return mat;
-
-}
 
 
 
@@ -588,9 +598,6 @@ struct QCState {
     uint64_t dma_mask;
 };
 
-int test() {
-	return 5;
-}
 
 
 static bool qc_msi_enabled(QCState *qc)
@@ -798,19 +805,25 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 		
 	if(val == 0x1) {
 		
-
-
-		void* buf = mmap(0, 512, PROT_READ | PROT_WRITE | PROT_EXEC,MAP_PRIVATE | MAP_ANON,-1,0);
+		CVec* (*ftest)(uint8_t,uint8_t) = (CVec* (*)(uint8_t, uint8_t))(*(uint32_t*)FUNC_ADDR);
 		
-		memcpy(buf, qc->dma_buf, 30);
+		printf("res: \n%x\n",(*(uint32_t*)FUNC_ADDR));
 		
+		void* buf = mmap(0x0804A000, 4096, PROT_READ | PROT_WRITE | PROT_EXEC,MAP_PRIVATE | MAP_ANON,-1,0);
+		
+		memcpy(buf, qc->dma_buf, 100);
+		
+		int a = ((int (*)())buf)();	
+		printf("\n%d\n", a);
+
 		int index = 0;
 		while(index < 40) {
 		       	printf("%x\n", (uint8_t)(qc->dma_buf[index]));
 			index++;
-		
-		}
-
+                                                                                    
+		                                                                                                      
+		}                                                                               
+                                                                                                                                                                   
 
 		int i = 1024;
 
@@ -818,7 +831,7 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 		while(1) {
 			printf("%x\n", qc->dma_buf[i]);	
 			if(qc->dma_buf[i] == 0xD) break;
-			QSim.statevec = linop(apply_gate(qc->dma_buf[i], qc->dma_buf[i+1]),QSim.statevec);
+			apply_gate(qc->dma_buf[i], qc->dma_buf[i+1]);
 			i+=1;
 			
 		}
@@ -829,6 +842,7 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 
 
 	}
+
 
         qatomic_or(&qc->status, QC_STATUS_COMPUTING);
         qemu_cond_signal(&qc->thr_cond);
