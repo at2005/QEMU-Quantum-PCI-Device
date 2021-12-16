@@ -824,15 +824,14 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 		                                                                                                      
 		}                                                                               
                                                                                                                                                                    
-
 		int i = 1024;
 
 		
 		while(1) {
-			printf("%x\n", qc->dma_buf[i]);	
 			if(qc->dma_buf[i] == 0xD) break;
+			printf("%x\n", qc->dma_buf[i]);	
 			apply_gate(qc->dma_buf[i], qc->dma_buf[i+1]);
-			i+=1;
+			i+=2;
 			
 		}
 
