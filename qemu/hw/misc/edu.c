@@ -492,9 +492,9 @@ static struct {
 } QSim;
 
 
-#define NUM_QUBITS 4
+#define NUM_QUBITS 2
 
-void apply_gate(uint32_t index, uint32_t qubit) {
+void apply_gate(uint32_t index, uint32_t qubit, uint32_t opt) {
 	
 	
 	//printf("skdfjsdkfjhsdkhjf\n\n\n\n");
@@ -502,6 +502,13 @@ void apply_gate(uint32_t index, uint32_t qubit) {
 	
 
 	CVec* mat;
+	if(index == 5) {
+		QSim.statevec = linop(gate(), QSim.statevec);
+		return;
+	
+	} 
+
+
 	for(int i = 0; i < NUM_QUBITS; i++) {
 		if(i == qubit) {
 			if(i == 0) mat = gate();
@@ -543,9 +550,9 @@ void init_qc(unsigned int num_qubits) {
 	
 
 
-	uint64_t* faddr = (uint64_t*)mmap((void*)FUNC_ADDR, 4, PROT_READ | PROT_NONE | PROT_WRITE | PROT_EXEC,  MAP_ANON | MAP_PRIVATE,-1,0);
+	uint32_t* faddr = (uint32_t*)mmap((void*)FUNC_ADDR, 4, PROT_READ | PROT_NONE | PROT_WRITE | PROT_EXEC,  MAP_ANON | MAP_PRIVATE,-1,0);
 	
-	*faddr = (uint64_t)(&apply_gate);
+	*faddr = (uint32_t)(&apply_gate);
 
 		
 }
@@ -824,54 +831,28 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 		
 	if(val == 0x1) {
 		
-		void (*ftest)(uint32_t,uint32_t) = (void (*)(uint32_t, uint32_t))(*(uint64_t*)FUNC_ADDR);
+		void (*ftest)(uint32_t,uint32_t) = (void (*)(uint32_t, uint32_t))(*(uint32_t*)FUNC_ADDR);
 	
 	
 	//	printf("res: \n%x\n",(*(uint32_t*)FUNC_ADDR));
 	//	printf("%x\n", &apply_gate);
 		
-	//	func_header* fhead = (func_header*)(qc->dma_buf);	
+		func_header* fhead = (func_header*)(qc->dma_buf);	
+		printf("\n%d\n", fhead->num_func);
 
-	//	func_table* ftable = (func_table*)((uint64_t)(qc->dma_buf) + fhead->offset);
+		func_table* ftable = (func_table*)((uint32_t)(qc->dma_buf) + fhead->offset);
 
 	
 		uint8_t* buf = mmap(0x0804A000, 4096, PROT_READ |PROT_NONE | PROT_WRITE | PROT_EXEC,MAP_PRIVATE | MAP_FIXED | MAP_ANON,-1,0);
 		
 		
-		
-		memcpy(buf, qc->dma_buf, 200);
 	
-		for(int i = 0; i < 100; i++) printf("%x\n", buf[i]);
 
-		int a = ((int (*)())buf)();	
-
-	//	(*ftest)(0,0);
-
-		//func_header* fhead = (func_header*)buf;
-		
-
-/*	
 		for(int i = 0; i < fhead->num_func; i++) {
-		//	memcpy((void*)(ftable[i].addr), (uint8_t*)((uint64_t)(qc->dma_buf) + (uint64_t)(ftable[i].offset)), ftable[i].size);	
+			memcpy((void*)(ftable[i].addr), (uint8_t*)((uint32_t)(qc->dma_buf) + (uint32_t)(ftable[i].offset)), ftable[i].size);	
 		
-			memcpy((void*)(0x0804A000), (uint8_t*)((uint64_t)(qc->dma_buf) + (uint64_t)(ftable[i].offset)), ftable[i].size);	
-				
-			
-			
 		}
 
-*/
-		
-
-		//printf("%s", ftable[1].fname);
-
-		//printf("\n\n%d\n\n", fhead->num_func);
-
-		
-		
-		//printf("\n%d\n", a);
-
-//		uint8_t* new_buf = (uint8_t*)buf;
 		
 		int index = 0;
 		while(index < 100) {
@@ -881,17 +862,31 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 		                                                                                                      
 		}                                                                               
 
-	//	int a = ((int (*)())(void*)((uint64_t)buf + 8))();	
 		
 	
 		int i = 1024;	
 		
 		while(1) {
-			if(qc->dma_buf[i] == 0xD) break;
 			printf("%x\n", qc->dma_buf[i]);	
-			apply_gate(qc->dma_buf[i], qc->dma_buf[i+1]);
-			i+=2;
+			if(qc->dma_buf[i] == 0xD) break;
+			if(qc->dma_buf[i] == 0xA) {
+				char* str = (char*)(&(qc->dma_buf[i+1]));
+				for(int func = 0; func < fhead->num_func; func++) {
+					if(!strcmp(ftable[func].fname, str)) {
+						printf(ftable[func].fname);
+						int a = ((int (*)())(void*)((ftable[func].addr)))();	
+						//printf("\n%d\n", a);
+					}
+				}
+
+
+				i += strlen(str) + 2;	
+				continue;
 			
+			}
+
+			apply_gate(qc->dma_buf[i], qc->dma_buf[i+1], qc->dma_buf[i+2]);
+			i+=3;
 		}
 
 
