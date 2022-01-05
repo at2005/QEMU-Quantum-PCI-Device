@@ -297,9 +297,9 @@ CVec* tensor(CVec* a, CVec* b) {
 	CVec* b_dg = transpose(b);
 	// iterate and calculate vector tensor product and add to matrix
 	for(int i = 0; i < a->size; i++) {
-		CVec* col = VPTR(subscript(a,i)->val);
+		CVec* row = VPTR(subscript(a,i)->val);
 		for(int j = 0; j < b_dg->size; j++) {
-			CVec* row = VPTR(subscript(b,j)->val);
+			CVec* col = VPTR(subscript(b,j)->val);
 			vec_push(tensor_prod, tensor_vec(col,row)); 	
 
 		}
@@ -885,6 +885,22 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 			
 			}
 
+/*			if(qc->dma_buf[i] == 0xF) {
+				srand(time(0)); 
+				double meas_val = (double)rand() / (double)RAND_MAX;
+				double p0 = absq((CVAL(subscript(QSim.statevec,0)->val))).real;
+				double p1 = absq((CVAL(subscript(QSim.statevec,1)->val))).real;
+				double p2 = absq((CVAL(subscript(QSim.statevec,2)->val))).real;
+				double p3 = absq((CVAL(subscript(QSim.statevec,3)->val))).real;
+				if(meas_val <= p0) printf("00\n");
+				else if(meas_val > p0 && meas_val <= (p0+p1)) printf("01\n");
+				else if(meas_val > (p0+p1) && meas_val <= (p0+p1+p2)) printf("10\n");
+				else if(meas_val > (p0+p1+p2) && meas_val <= 1) printf("11\n");
+				i+=3;
+				continue;
+			
+			} 
+*/
 			apply_gate(qc->dma_buf[i], qc->dma_buf[i+1], qc->dma_buf[i+2]);
 			i+=3;
 		}
