@@ -297,9 +297,9 @@ CVec* tensor(CVec* a, CVec* b) {
 	CVec* b_dg = transpose(b);
 	// iterate and calculate vector tensor product and add to matrix
 	for(int i = 0; i < a->size; i++) {
-		CVec* row = VPTR(subscript(a,i)->val);
+		CVec* col = VPTR(subscript(a,i)->val);
 		for(int j = 0; j < b_dg->size; j++) {
-			CVec* col = VPTR(subscript(b,j)->val);
+			CVec* row = VPTR(subscript(b,j)->val);
 			vec_push(tensor_prod, tensor_vec(col,row)); 	
 
 		}
@@ -357,7 +357,7 @@ CVec* create_matrix(Complex* a, Complex* b, Complex* c, Complex* d) {
 }
 
 
-CVec* cnot_gate() {
+CVec* cnot_gate(void) {
 	CVec* matrix = create_vec();
 	CVec* row1 = create_vec();
 	CVec* row2 = create_vec();
@@ -413,7 +413,7 @@ CVec* cnot_gate() {
 }
 
 
-CVec* h_gate() {
+CVec* h_gate(void) {
 
 	Complex* m1 = create_complex(1/sqrt(2), 0);
 	Complex* m2 = create_complex(1/sqrt(2), 0);
@@ -429,7 +429,7 @@ CVec* h_gate() {
 }
 
 
-CVec* id_gate() {
+CVec* id_gate(void) {
 	Complex* m1 = create_complex(1,0);
 	Complex* m2 = create_complex(0,0);
 	Complex* m3 = create_complex(0,0);
@@ -441,7 +441,7 @@ CVec* id_gate() {
 }
 
 
-CVec* x_gate() {
+CVec* x_gate(void) {
 	Complex* m1 = create_complex(0,0);
 	Complex* m2 = create_complex(1,0);
 	Complex* m3 = create_complex(1,0);
@@ -453,7 +453,7 @@ CVec* x_gate() {
 }
 
 
-CVec* z_gate() {
+CVec* z_gate(void) {
 	Complex* m1 = create_complex(1,0);
 	Complex* m2 = create_complex(0,0);
 	Complex* m3 = create_complex(0,0);
@@ -466,7 +466,7 @@ CVec* z_gate() {
 }
 
 
-CVec* y_gate() {
+CVec* y_gate(void) {
 
 	Complex* m1 = create_complex(0,0);
 	Complex* m2 = create_complex(0,-1);
@@ -476,6 +476,18 @@ CVec* y_gate() {
 	CVec* y_2d = create_matrix(m1, m2, m3, m4);
 	return y_2d;
 
+
+}
+
+
+CVec* rx_gate(double theta) {
+	Complex* m1 = create_complex(cos(theta/2),0);
+	Complex* m2 = create_complex(0,-1*sin(theta/2));
+	Complex* m3 = create_complex(0,-1*sin(theta/2));
+	Complex* m4 = create_complex(cos(theta/2),0);
+
+	CVec* rx_2d = create_matrix(m1, m2, m3, m4);
+	return rx_2d;
 
 }
 
@@ -496,35 +508,62 @@ static struct {
 
 void apply_gate(uint32_t index, uint32_t qubit, uint32_t opt) {
 	
-	
 	//printf("skdfjsdkfjhsdkhjf\n\n\n\n");
-	CVec* (*gate)() = QSim.func_arr[index];
-	
+       	if(index != 0x6 && index != 0xF) {
+		CVec* (*gate)() = QSim.func_arr[index];
+		CVec* mat;
+		if(index == 5) {
+			QSim.statevec = linop(gate(), QSim.statevec);
+			return;
+		
+		} 
 
-	CVec* mat;
-	if(index == 5) {
-		QSim.statevec = linop(gate(), QSim.statevec);
-		return;
-	
-	} 
 
+		for(int i = 0; i < NUM_QUBITS; i++) {
+			if(i == qubit) {
+				if(i == 0) mat = gate();
+				else mat = tensor(mat, gate());
+				continue;
+			}
+			
 
-	for(int i = 0; i < NUM_QUBITS; i++) {
-		if(i == qubit) {
-			if(i == 0) mat = gate();
-			else mat = tensor(mat, gate());
-			continue;
+			if(i == 0) mat = id_gate();
+			else mat = tensor(mat,id_gate());
+			
+			
+		
 		}
-		
 
-		if(i == 0) mat = id_gate();
-		else mat = tensor(mat,id_gate());
-		
-		
+		QSim.statevec = linop(mat, QSim.statevec);
+	}
+
+	
+	else if(index == 0xF) {
+		uint32_t* maddr = (uint32_t*)opt;
+		//printf("val: %x\n", val);
+	//	print_vector(QSim.statevec);
+		double meas_val = (double)rand() / (double)RAND_MAX;
+		double p0 = absq((CVAL(subscript(QSim.statevec,0)->val))).real;
+		double p1 = absq((CVAL(subscript(QSim.statevec,1)->val))).real;
+		double p2 = absq((CVAL(subscript(QSim.statevec,2)->val))).real;
+		double p3 = absq((CVAL(subscript(QSim.statevec,3)->val))).real;
+	//	printf("%f\n%f\n%f\n%f\n", p0, p1,p2,p3);
+		if(meas_val <= p0) *maddr = 0; //printf("00\n");
+		else if(meas_val > p0 && meas_val <= (p0+p1)) *maddr = 1; //printf("01\n");
+		else if(meas_val > (p0+p1) && meas_val <= (p0+p1+p2)) *maddr = 2; //printf("10\n");
+		else if(meas_val > (p0+p1+p2) && meas_val <= 1) *maddr = 3; //printf("11\n");
+		init_qc(NUM_QUBITS);		
 	
 	}
 
-	QSim.statevec = linop(mat, QSim.statevec);
+	else {
+		CVec* mat = tensor(rx_gate((double)(opt/10.00)), id_gate());
+		QSim.statevec = linop(mat, QSim.statevec);
+	
+	
+	}
+
+
 	return;
 
 }
@@ -778,12 +817,6 @@ static uint64_t qc_mmio_read(void *opaque, hwaddr addr, unsigned size)
     case 0x20:
         val = qatomic_read(&qc->status);
         break;
-    case 0x24:
-        val = qc->irq_status;
-        break;
-    case 0x80:
-        dma_rw(qc, false, &val, &qc->dma.src, false);
-        break;
     case 0x88:
         dma_rw(qc, false, &val, &qc->dma.dst, false);
         break;
@@ -833,6 +866,7 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 		
 		void (*ftest)(uint32_t,uint32_t) = (void (*)(uint32_t, uint32_t))(*(uint32_t*)FUNC_ADDR);
 	
+		srand(time(NULL)); 
 	
 	//	printf("res: \n%x\n",(*(uint32_t*)FUNC_ADDR));
 	//	printf("%x\n", &apply_gate);
@@ -867,7 +901,7 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 		int i = 1024;	
 		
 		while(1) {
-			printf("%x\n", qc->dma_buf[i]);	
+			printf("%x\n%x\n%x\n", qc->dma_buf[i], qc->dma_buf[i+1], qc->dma_buf[i+2]);	
 			if(qc->dma_buf[i] == 0xD) break;
 			if(qc->dma_buf[i] == 0xA) {
 				char* str = (char*)(&(qc->dma_buf[i+1]));
@@ -875,7 +909,7 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 					if(!strcmp(ftable[func].fname, str)) {
 						printf(ftable[func].fname);
 						int a = ((int (*)())(void*)((ftable[func].addr)))();	
-						//printf("\n%d\n", a);
+						printf("\nHere is the return result: %d\n", a);
 					}
 				}
 
@@ -885,22 +919,8 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
 			
 			}
 
-/*			if(qc->dma_buf[i] == 0xF) {
-				srand(time(0)); 
-				double meas_val = (double)rand() / (double)RAND_MAX;
-				double p0 = absq((CVAL(subscript(QSim.statevec,0)->val))).real;
-				double p1 = absq((CVAL(subscript(QSim.statevec,1)->val))).real;
-				double p2 = absq((CVAL(subscript(QSim.statevec,2)->val))).real;
-				double p3 = absq((CVAL(subscript(QSim.statevec,3)->val))).real;
-				if(meas_val <= p0) printf("00\n");
-				else if(meas_val > p0 && meas_val <= (p0+p1)) printf("01\n");
-				else if(meas_val > (p0+p1) && meas_val <= (p0+p1+p2)) printf("10\n");
-				else if(meas_val > (p0+p1+p2) && meas_val <= 1) printf("11\n");
-				i+=3;
-				continue;
-			
-			} 
-*/
+
+
 			apply_gate(qc->dma_buf[i], qc->dma_buf[i+1], qc->dma_buf[i+2]);
 			i+=3;
 		}
