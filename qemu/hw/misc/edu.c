@@ -642,7 +642,7 @@ struct QCState {
     bool stopping;
 
     uint32_t addr4;
-    uint32_t fact;
+    int res;
 #define QC_STATUS_COMPUTING    0x01
 #define QC_STATUS_IRQFACT      0x80
     uint32_t status;
@@ -948,45 +948,28 @@ static void *qc_comp_thread(void *opaque)
 		srand(time(NULL)); 
 		
 		func_header* fhead = (func_header*)(qc->dma_buf);	
-		printf("\n%d\n", fhead->num_func);
 
 		func_table* ftable = (func_table*)((uint32_t)(qc->dma_buf) + fhead->offset);
 
 		uint8_t* buf = mmap(0x0804A000, 4096, PROT_READ |PROT_NONE | PROT_WRITE | PROT_EXEC,MAP_SHARED | MAP_FIXED | MAP_ANON,-1,0);
-		
-	//	uint8_t* stack = mmap(0, 512, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);	
-		
-		
-		
+			
 		for(int i = 0; i < fhead->num_func; i++) {
 			memcpy((void*)(ftable[i].addr), (uint8_t*)((uint32_t)(qc->dma_buf) + (uint32_t)(ftable[i].offset)), ftable[i].size);	
 		
 		}
-	
-
-		int index = 1024;
-		while(index < 50) {
-//		    	printf("%x\n", qc->dma_buf[index]);
-			index++;
-                                                                                    
-		                                                                                                      
-		}                                                                               
-
 		
-	
+
 		int i = 1024;	
 		
 		while(1) {
-			printf("%x\n%x\n%x\n", qc->dma_buf[i], qc->dma_buf[i+1], qc->dma_buf[i+2]);	
+		//	printf("%x\n%x\n%x\n", qc->dma_buf[i], qc->dma_buf[i+1], qc->dma_buf[i+2]);	
 			if(qc->dma_buf[i] == 0xD) break;
 			if(qc->dma_buf[i] == 0xA) {
 				char* str = (char*)(&(qc->dma_buf[i+1]));
 				for(int func = 0; func < fhead->num_func; func++) {
 					if(!strcmp(ftable[func].fname, str)) {
-						printf(ftable[func].fname);
 						int a = ((int (*)())(void*)((ftable[func].addr)))();	
 						qc->res = a;
-						//printf("\nHere is the return result: %d\n", a);
 					}
 				}
 
@@ -1003,7 +986,7 @@ static void *qc_comp_thread(void *opaque)
 		}
 
 
-		print_vector(QSim.statevec);
+//		print_vector(QSim.statevec);
 
 
 	}
