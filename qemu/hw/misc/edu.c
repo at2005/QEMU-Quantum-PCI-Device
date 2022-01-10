@@ -539,7 +539,9 @@ void apply_gate(uint32_t index, uint32_t qubit, uint32_t opt) {
 
 	
 	else if(index == 0xF) {
-		uint32_t* maddr = (uint32_t*)opt;
+		uint32_t* maddr;
+	       	if(opt != 0) maddr = (uint32_t*)opt;
+		else maddr = (uint32_t*)malloc(sizeof(uint32_t));
 		//printf("val: %x\n", val);
 	//	print_vector(QSim.statevec);
 		double meas_val = (double)rand() / (double)RAND_MAX;
@@ -807,10 +809,10 @@ static uint64_t qc_mmio_read(void *opaque, hwaddr addr, unsigned size)
         val = qc->addr4;
         break;
     case 0x08:
-        /*qemu_mutex_lock(&qc->thr_mutex);
-        val = qc->fact;
+        qemu_mutex_lock(&qc->thr_mutex);
+        val = qc->res;
         qemu_mutex_unlock(&qc->thr_mutex);
-        break;*/
+        break;
 		
 
 	break;
@@ -858,91 +860,20 @@ static void qc_mmio_write(void *opaque, hwaddr addr, uint64_t val,
          */
 	
         qemu_mutex_lock(&qc->thr_mutex);
-        //qc->fact = val;
-
+        qc->res = 0x8;	
 		
-		
-	if(val == 0x1) {
-		
-		void (*ftest)(uint32_t,uint32_t) = (void (*)(uint32_t, uint32_t))(*(uint32_t*)FUNC_ADDR);
-	
-		srand(time(NULL)); 
-	
-	//	printf("res: \n%x\n",(*(uint32_t*)FUNC_ADDR));
-	//	printf("%x\n", &apply_gate);
-		
-		func_header* fhead = (func_header*)(qc->dma_buf);	
-		printf("\n%d\n", fhead->num_func);
-
-		func_table* ftable = (func_table*)((uint32_t)(qc->dma_buf) + fhead->offset);
-
-	
-		uint8_t* buf = mmap(0x0804A000, 4096, PROT_READ |PROT_NONE | PROT_WRITE | PROT_EXEC,MAP_PRIVATE | MAP_FIXED | MAP_ANON,-1,0);
-		
-		
-	
-
-		for(int i = 0; i < fhead->num_func; i++) {
-			memcpy((void*)(ftable[i].addr), (uint8_t*)((uint32_t)(qc->dma_buf) + (uint32_t)(ftable[i].offset)), ftable[i].size);	
-		
-		}
-
-		
-		int index = 0;
-		while(index < 100) {
-//		    	printf("%x\n", (uint8_t)(new_buf[index]));
-			index++;
-                                                                                    
-		                                                                                                      
-		}                                                                               
-
-		
-	
-		int i = 1024;	
-		
-		while(1) {
-			printf("%x\n%x\n%x\n", qc->dma_buf[i], qc->dma_buf[i+1], qc->dma_buf[i+2]);	
-			if(qc->dma_buf[i] == 0xD) break;
-			if(qc->dma_buf[i] == 0xA) {
-				char* str = (char*)(&(qc->dma_buf[i+1]));
-				for(int func = 0; func < fhead->num_func; func++) {
-					if(!strcmp(ftable[func].fname, str)) {
-						printf(ftable[func].fname);
-						int a = ((int (*)())(void*)((ftable[func].addr)))();	
-						printf("\nHere is the return result: %d\n", a);
-					}
-				}
-
-
-				i += strlen(str) + 2;	
-				continue;
-			
-			}
-
-
-
-			apply_gate(qc->dma_buf[i], qc->dma_buf[i+1], qc->dma_buf[i+2]);
-			i+=3;
-		}
-
-
-		print_vector(QSim.statevec);
-
-
-
-	}
-
-
         qatomic_or(&qc->status, QC_STATUS_COMPUTING);
         qemu_cond_signal(&qc->thr_cond);
         qemu_mutex_unlock(&qc->thr_mutex);
         break;
-    case 0x20:
+
+
+  	 case 0x20:
         if (val & QC_STATUS_IRQFACT) {
             qatomic_or(&qc->status, QC_STATUS_IRQFACT);
         } else {
             qatomic_and(&qc->status, ~QC_STATUS_IRQFACT);
-        }
+       	}
         break;
     case 0x60:
         qc_raise_irq(qc, val);
@@ -989,7 +920,7 @@ static const MemoryRegionOps qc_mmio_ops = {
  * We purposely use a thread, so that users are forced to wait for the status
  * register.
  */
-static void *qc_fact_thread(void *opaque)
+static void *qc_comp_thread(void *opaque)
 {
     QCState *qc = opaque;
 
@@ -1007,12 +938,77 @@ static void *qc_fact_thread(void *opaque)
             break;
         }
 
-        val = qc->fact;
+        val = qc->res;
         qemu_mutex_unlock(&qc->thr_mutex);
 
-        while (val > 0) {
-            ret *= val--;
-        }
+	if(val == 0x8) {
+		val = 0;		
+		void (*ftest)(uint32_t,uint32_t) = (void (*)(uint32_t, uint32_t))(*(uint32_t*)FUNC_ADDR);
+	
+		srand(time(NULL)); 
+		
+		func_header* fhead = (func_header*)(qc->dma_buf);	
+		printf("\n%d\n", fhead->num_func);
+
+		func_table* ftable = (func_table*)((uint32_t)(qc->dma_buf) + fhead->offset);
+
+		uint8_t* buf = mmap(0x0804A000, 4096, PROT_READ |PROT_NONE | PROT_WRITE | PROT_EXEC,MAP_SHARED | MAP_FIXED | MAP_ANON,-1,0);
+		
+	//	uint8_t* stack = mmap(0, 512, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANON, -1, 0);	
+		
+		
+		
+		for(int i = 0; i < fhead->num_func; i++) {
+			memcpy((void*)(ftable[i].addr), (uint8_t*)((uint32_t)(qc->dma_buf) + (uint32_t)(ftable[i].offset)), ftable[i].size);	
+		
+		}
+	
+
+		int index = 1024;
+		while(index < 50) {
+//		    	printf("%x\n", qc->dma_buf[index]);
+			index++;
+                                                                                    
+		                                                                                                      
+		}                                                                               
+
+		
+	
+		int i = 1024;	
+		
+		while(1) {
+			printf("%x\n%x\n%x\n", qc->dma_buf[i], qc->dma_buf[i+1], qc->dma_buf[i+2]);	
+			if(qc->dma_buf[i] == 0xD) break;
+			if(qc->dma_buf[i] == 0xA) {
+				char* str = (char*)(&(qc->dma_buf[i+1]));
+				for(int func = 0; func < fhead->num_func; func++) {
+					if(!strcmp(ftable[func].fname, str)) {
+						printf(ftable[func].fname);
+						int a = ((int (*)())(void*)((ftable[func].addr)))();	
+						qc->res = a;
+						//printf("\nHere is the return result: %d\n", a);
+					}
+				}
+
+
+				i += strlen(str) + 2;	
+				continue;
+			
+			}
+
+
+
+			apply_gate(qc->dma_buf[i], qc->dma_buf[i+1], qc->dma_buf[i+2]);
+			i+=3;
+		}
+
+
+		print_vector(QSim.statevec);
+
+
+	}
+
+	// THIS THIS THIS
 
         /*
          * We should sleep for a random period here, so that students are
@@ -1020,13 +1016,12 @@ static void *qc_fact_thread(void *opaque)
          */
 
         qemu_mutex_lock(&qc->thr_mutex);
-        qc->fact = ret;
-        qemu_mutex_unlock(&qc->thr_mutex);
-        qatomic_and(&qc->status, ~QC_STATUS_COMPUTING);
+   	qemu_mutex_unlock(&qc->thr_mutex);
+       	qatomic_and(&qc->status, ~QC_STATUS_COMPUTING);
 
         if (qatomic_read(&qc->status) & QC_STATUS_IRQFACT) {
-            qemu_mutex_lock_iothread();
-            qc_raise_irq(qc, FACT_IRQ);
+		qemu_mutex_lock_iothread();
+            	qc_raise_irq(qc, FACT_IRQ);
             qemu_mutex_unlock_iothread();
         }
     }
@@ -1050,7 +1045,7 @@ static void pci_qc_realize(PCIDevice *pdev, Error **errp)
 
     qemu_mutex_init(&qc->thr_mutex);
     qemu_cond_init(&qc->thr_cond);
-    qemu_thread_create(&qc->thread, "qc", qc_fact_thread,
+    qemu_thread_create(&qc->thread, "qc", qc_comp_thread,
                        qc, QEMU_THREAD_JOINABLE);
 
     memory_region_init_io(&qc->mmio, OBJECT(qc), &qc_mmio_ops, qc,
